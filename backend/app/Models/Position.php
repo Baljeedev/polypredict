@@ -10,4 +10,9 @@ class Position extends Model
         'user_id', 'market_id', 'outcome', 'shares',
         'tokens_spent', 'avg_price', 'status',
     ];
+
+    public function market()
+    {
+        return $this->belongsTo(Market::class);
+    }
 }
