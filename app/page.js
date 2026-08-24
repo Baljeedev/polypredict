@@ -65,7 +65,7 @@ function HomeMarkets() {
             <span className="hero-scan" />
           </div>
           <div className="hero-copy">
-            <p className="home-kicker">Live prediction markets</p>
+            <p className="home-kicker">Live prediction markets.</p>
             <h1>
               See the odds.
               <span> Make the call.</span>
