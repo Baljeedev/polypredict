@@ -31,8 +31,8 @@ class TradeController extends Controller
 
         $b = max(1, (int) $market->b);
         $shares = $this->sharesForSpend(
-            (int) $market->q_yes,
-            (int) $market->q_no,
+            (float) $market->q_yes,
+            (float) $market->q_no,
             $b,
             $outcome,
             $tokens
@@ -49,12 +49,12 @@ class TradeController extends Controller
             $wallet->committed += $tokens;
             $wallet->save();
 
-            $qYes = (int) $market->q_yes;
-            $qNo = (int) $market->q_no;
+            $qYes = (float) $market->q_yes;
+            $qNo = (float) $market->q_no;
             if ($outcome === 'yes') {
-                $qYes += (int) round($shares);
+                $qYes += $shares;
             } else {
-                $qNo += (int) round($shares);
+                $qNo += $shares;
             }
 
             [$yesPrice, $noPrice] = $this->prices($qYes, $qNo, $b);
@@ -96,7 +96,7 @@ class TradeController extends Controller
         return [$pYes, 100 - $pYes];
     }
 
-    private function sharesForSpend(int $qYes, int $qNo, int $b, string $outcome, int $tokens): float
+    private function sharesForSpend(float $qYes, float $qNo, int $b, string $outcome, int $tokens): float
     {
         $t = $tokens / 100;
         $ey = exp($qYes / $b);
@@ -135,35 +135,36 @@ class TradeController extends Controller
             ->where('status', 'open')
             ->first();
 
-        if (!$pos || (float) $pos->shares < $shares) {
+        if (!$pos || (float) $pos->shares + 0.0000001 < $shares) {
             throw ValidationException::withMessages(['shares' => ['Not enough shares.']]);
         }
 
         $b = max(1, (int) $market->b);
-        $qYes = (int) $market->q_yes;
-        $qNo = (int) $market->q_no;
-        $sold = (int) max(1, round($shares));
+        $qYes = (float) $market->q_yes;
+        $qNo = (float) $market->q_no;
 
-        if ($outcome === 'yes') {
-            if ($sold > $qYes) {
-                throw ValidationException::withMessages(['shares' => ['Not enough pool shares.']]);
-            }
-            $tokensBack = $this->tokensForSell($qYes, $qNo, $b, 'yes', $sold);
-            $qYes -= $sold;
-        } else {
-            if ($sold > $qNo) {
-                throw ValidationException::withMessages(['shares' => ['Not enough pool shares.']]);
-            }
-            $tokensBack = $this->tokensForSell($qYes, $qNo, $b, 'no', $sold);
-            $qNo -= $sold;
+        if ($outcome === 'yes' && $qYes < $shares) {
+            $qYes = $shares;
+        }
+        if ($outcome === 'no' && $qNo < $shares) {
+            $qNo = $shares;
         }
 
+        $tokensBack = $this->tokensForSell($qYes, $qNo, $b, $outcome, $shares);
         $tokensBack = max(1, $tokensBack);
-        $wallet = $user->wallet;
 
-        DB::transaction(function () use ($wallet, $tokensBack, $pos, $shares, $market, $qYes, $qNo, $b) {
+        if ($outcome === 'yes') {
+            $qYes = max(0, $qYes - $shares);
+        } else {
+            $qNo = max(0, $qNo - $shares);
+        }
+
+        $wallet = $user->wallet;
+        $spent = (int) $pos->tokens_spent;
+
+        DB::transaction(function () use ($wallet, $tokensBack, $pos, $shares, $spent, $market, $qYes, $qNo, $b) {
             $wallet->available += $tokensBack;
-            $wallet->committed = max(0, (int) $wallet->committed - $tokensBack);
+            $wallet->committed = max(0, (int) $wallet->committed - $spent);
             $wallet->save();
 
             [$yesPrice, $noPrice] = $this->prices($qYes, $qNo, $b);
@@ -178,6 +179,7 @@ class TradeController extends Controller
                 $pos->delete();
             } else {
                 $pos->shares = $left;
+                $pos->tokens_spent = max(0, $spent - $tokensBack);
                 $pos->save();
             }
         });
@@ -189,7 +191,7 @@ class TradeController extends Controller
         ]);
     }
 
-    private function tokensForSell(int $qYes, int $qNo, int $b, string $outcome, int $sold): int
+    private function tokensForSell(float $qYes, float $qNo, int $b, string $outcome, float $sold): int
     {
         $cost = function ($y, $n) use ($b) {
             return $b * log(exp($y / $b) + exp($n / $b));

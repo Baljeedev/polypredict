@@ -14,6 +14,7 @@ function formatCount(n) {
 export default function PortfolioPage() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const [claimMsg, setClaimMsg] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -31,6 +32,31 @@ export default function PortfolioPage() {
       .then(setData)
       .catch((e) => setErr(e.message));
   }, []);
+
+  function claimedToday() {
+    const t = data?.wallet?.last_claim_at;
+    if (!t) return false;
+    return new Date(t).toDateString() === new Date().toDateString();
+  }
+
+  async function claimDaily() {
+    setClaimMsg("");
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API}/api/wallet/claim`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: "Bearer " + token,
+      },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setClaimMsg(body.message || "Could not claim");
+      return;
+    }
+    setData({ ...data, wallet: body });
+    setClaimMsg("You got 50 tokens.");
+  }
 
   if (err === "login") {
     return (
@@ -111,6 +137,20 @@ export default function PortfolioPage() {
             <span>Free {Math.round((available / total) * 100)}%</span>
             <span>Committed {Math.round((committed / total) * 100)}%</span>
           </div>
+        </div>
+
+        <div className="port-section">
+          <h2>Daily reward</h2>
+          <p className="muted">Once per day: +50 tokens. No real money.</p>
+          <button
+            type="button"
+            className="btn-green"
+            disabled={claimedToday()}
+            onClick={claimDaily}
+          >
+            {claimedToday() ? "Claimed today" : "Claim 50 tokens"}
+          </button>
+          {claimMsg && <p className="muted">{claimMsg}</p>}
         </div>
 
         <div className="port-section">

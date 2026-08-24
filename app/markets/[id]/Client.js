@@ -17,6 +17,8 @@ export default function Client({ id }) {
   const [tokens, setTokens] = useState(10);
   const [msg, setMsg] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
+  const [posYes, setPosYes] = useState(null);
+  const [posNo, setPosNo] = useState(null);
 
   useEffect(() => {
     fetch(`${API}/api/markets/${id}`)
@@ -31,13 +33,28 @@ export default function Client({ id }) {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
-    fetch(`${API}/api/user`, {
-      headers: { Accept: "application/json", Authorization: "Bearer " + token },
-    }).then((r) => {
+
+    const headers = {
+      Accept: "application/json",
+      Authorization: "Bearer " + token,
+    };
+
+    fetch(`${API}/api/user`, { headers }).then((r) => {
       if (r.ok) setLoggedIn(true);
       else localStorage.removeItem("token");
     });
-  }, []);
+
+    fetch(`${API}/api/portfolio`, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.positions) return;
+        const rows = data.positions.filter(
+          (p) => String(p.market_id) === String(id)
+        );
+        setPosYes(rows.find((p) => p.outcome === "yes") || null);
+        setPosNo(rows.find((p) => p.outcome === "no") || null);
+      });
+  }, [id]);
 
   async function buy(outcome) {
     setMsg("");
@@ -56,6 +73,51 @@ export default function Client({ id }) {
         Authorization: "Bearer " + token,
       },
       body: JSON.stringify({ outcome, tokens: Number(tokens) }),
+    });
+
+    const data = await res.json();
+
+    if (res.status === 401) {
+      localStorage.removeItem("token");
+      window.alert("Please login to trade");
+      go("/user/login/");
+      return;
+    }
+
+    if (!res.ok) {
+      setMsg(JSON.stringify(data.errors || data.message || data));
+      return;
+    }
+
+    go("/");
+  }
+
+  async function sell(outcome) {
+    setMsg("");
+    const token = localStorage.getItem("token");
+    if (!token) {
+      window.alert("Please login to trade");
+      go("/user/login/");
+      return;
+    }
+
+    const pos = outcome === "yes" ? posYes : posNo;
+    if (!pos || Number(pos.shares) <= 0) {
+      setMsg("No shares to sell on this side.");
+      return;
+    }
+
+    const res = await fetch(`${API}/api/markets/${id}/sell`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify({
+        outcome,
+        shares: Number(pos.shares),
+      }),
     });
 
     const data = await res.json();
@@ -95,7 +157,17 @@ export default function Client({ id }) {
         </p>
         <p>{m.resolution_rules}</p>
 
-        {loggedIn ? (
+        {m.status === "resolved" ? (
+          <div className="trade">
+            <p className={m.winner === "yes" ? "pct-yes" : "pct-no"}>
+              Result: {(m.winner || "").toUpperCase()} won
+            </p>
+            <p className="muted">This market is settled. Trading is closed.</p>
+            <Link href="/" className="btn-alt">
+              Back to markets
+            </Link>
+          </div>
+        ) : loggedIn ? (
           <div className="trade">
             <label>
               Tokens
@@ -114,6 +186,42 @@ export default function Client({ id }) {
                 Buy NO
               </button>
             </div>
+
+            {(posYes || posNo) && (
+              <div className="trade-sell">
+                {posYes && (
+                  <p className="muted">
+                    Your YES: {Number(posYes.shares).toFixed(2)} shares
+                  </p>
+                )}
+                {posNo && (
+                  <p className="muted">
+                    Your NO: {Number(posNo.shares).toFixed(2)} shares
+                  </p>
+                )}
+                <div className="trade-btns">
+                  {posYes && (
+                    <button
+                      type="button"
+                      className="btn-alt"
+                      onClick={() => sell("yes")}
+                    >
+                      Sell YES
+                    </button>
+                  )}
+                  {posNo && (
+                    <button
+                      type="button"
+                      className="btn-alt"
+                      onClick={() => sell("no")}
+                    >
+                      Sell NO
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {msg && <p className="muted">{msg}</p>}
           </div>
         ) : (
