@@ -26,8 +26,6 @@ Route::get('/markets/{market}', function (Market $market) {
     return $market;
 });
 
-
-
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/user', function (Request $request) {
