@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import SiteNav from "./SiteNav";
 import Loader from "./Loader";
@@ -9,91 +10,209 @@ const API =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://pixxelu.com/dev/predict/backend/public";
 
-export default function Home() {
-  const [category, setCategory] = useState("");
+const CATEGORIES = [
+  { href: "/", label: "Trending", value: "" },
+  { href: "/?category=Finance", label: "Finance", value: "Finance" },
+  { href: "/?category=Sports", label: "Sports", value: "Sports" },
+  { href: "/?category=Technology", label: "Technology", value: "Technology" },
+  { href: "/?category=Entertainment", label: "Entertainment", value: "Entertainment" },
+  { href: "/?category=Current affairs", label: "Current affairs", value: "Current affairs" },
+];
+
+function formatCount(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString();
+}
+
+function HomeMarkets() {
+  const searchParams = useSearchParams();
+  const category = searchParams.get("category") || "";
   const [markets, setMarkets] = useState(null);
-  const [msg, setMsg] = useState("Starting…");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const cat = params.get("category") || "";
-    setCategory(cat);
+    const t = setTimeout(() => setMarkets([]), 8000);
 
-    const url = cat
-      ? `${API}/api/markets?category=${encodeURIComponent(cat)}`
-      : `${API}/api/markets`;
-
-    setMsg("Fetching " + url);
-
-    const t = setTimeout(() => {
-      setMsg((m) => m + " — timeout, API jawab nahi de rahi");
-      setMarkets([]);
-    }, 8000);
-
-    fetch(url)
-      .then((r) => {
-        setMsg("HTTP " + r.status + " from " + url);
-        return r.ok ? r.json() : [];
-      })
-      .catch((e) => {
-        setMsg("Fetch fail: " + (e.message || String(e)));
-        return [];
-      })
+    fetch(`${API}/api/markets`)
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => [])
       .then((data) => {
         clearTimeout(t);
         setMarkets(Array.isArray(data) ? data : []);
       });
+
+    return () => clearTimeout(t);
   }, []);
 
+  const featured =
+    markets && markets.length
+      ? [...markets].sort((a, b) => (Number(b.volume) || 0) - (Number(a.volume) || 0))[0]
+      : null;
+
+  const visible =
+    markets && category
+      ? markets.filter((m) => m.category === category)
+      : markets;
+
+  return (
+    <div className="home-shell">
+      <div className="home-grid" aria-hidden="true" />
+      <div className="home-content">
+        <section className="home-hero">
+          <div className="hero-bg" aria-hidden="true">
+            <span className="hero-orb hero-orb-a" />
+            <span className="hero-orb hero-orb-b" />
+            <span className="hero-orb hero-orb-c" />
+            <span className="hero-scan" />
+          </div>
+          <div className="hero-copy">
+            <p className="home-kicker">Live prediction markets</p>
+            <h1>
+              See the odds.
+              <span> Make the call.</span>
+            </h1>
+            <p>Trade YES or NO on live events. Prices move with the crowd — get in before the story ends.</p>
+            {markets && markets.length > 0 && (
+              <div className="home-stats">
+                <span>
+                  <b>{markets.length}</b> live
+                </span>
+                <span>
+                  <b>
+                    {formatCount(
+                      markets.reduce((sum, m) => sum + (Number(m.traders_count) || 0), 0)
+                    )}
+                  </b>{" "}
+                  traders
+                </span>
+                <span>
+                  <b>
+                    {formatCount(
+                      markets.reduce((sum, m) => sum + (Number(m.volume) || 0), 0)
+                    )}
+                  </b>{" "}
+                  volume
+                </span>
+              </div>
+            )}
+          </div>
+
+          <aside className="hero-board">
+            {featured ? (
+              <Link href={`/markets/${featured.id}`} className="hero-featured">
+                <div className="hero-featured-top">
+                  <span className="hot-badge">Hottest</span>
+                  <span className="card-cat">{featured.category}</span>
+                  <p className="live">LIVE</p>
+                </div>
+                <div className="hero-featured-body">
+                  <div
+                    className="hero-ring"
+                    style={{ "--p": `${featured.yes_price}%` }}
+                    aria-hidden="true"
+                  >
+                    <div className="hero-ring-inner">
+                      <b>{featured.yes_price}%</b>
+                      <small>YES</small>
+                    </div>
+                  </div>
+                  <div className="hero-featured-main">
+                    <h2>{featured.question}</h2>
+                    <div className="odds-track">
+                      <span className="odds-fill-yes" style={{ width: `${featured.yes_price}%` }} />
+                    </div>
+                    <div className="odds-row">
+                      <span className="pct-yes">
+                        <span className="pct-k">YES</span>
+                        <span className="pct-n">{featured.yes_price}%</span>
+                      </span>
+                      <span className="pct-no">
+                        <span className="pct-k">NO</span>
+                        <span className="pct-n">{featured.no_price}%</span>
+                      </span>
+                    </div>
+                    <div className="hero-featured-foot">
+                      <span>
+                        {formatCount(featured.traders_count)} traders · {formatCount(featured.volume)} vol
+                      </span>
+                      <span className="hero-cta">Trade now</span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ) : (
+              <div className="hero-featured hero-featured-wait">
+                <div className="hero-featured-top">
+                  <span className="hot-badge">Hottest</span>
+                  <p className="live">LIVE</p>
+                </div>
+                <h2>Waiting for live markets…</h2>
+              </div>
+            )}
+          </aside>
+        </section>
+
+        <nav className="cats">
+          {CATEGORIES.map((c) => (
+            <Link
+              key={c.label}
+              href={c.href}
+              scroll={false}
+              className={category === c.value ? "cat-active" : ""}
+            >
+              {c.label}
+            </Link>
+          ))}
+        </nav>
+        {visible === null ? (
+          <Loader />
+        ) : (
+            <div className="market-grid">
+              {visible.length === 0 && <p>No open markets yet.</p>}
+              {visible.map((m, i) => (
+                <Link
+                  href={`/markets/${m.id}`}
+                  className="card"
+                  key={m.id}
+                  style={{ "--i": i }}
+                >
+                  <div className="card-head">
+                    <p className="live">LIVE</p>
+                    <span className="card-cat">{m.category}</span>
+                  </div>
+                  <h2>{m.question}</h2>
+                  <div className="odds-track" aria-hidden="true">
+                    <span className="odds-fill-yes" style={{ width: `${m.yes_price}%` }} />
+                  </div>
+                  <div className="odds-row">
+                    <span className="pct-yes">
+                      <span className="pct-k">YES</span>
+                      <span className="pct-n">{m.yes_price}%</span>
+                    </span>
+                    <span className="pct-no">
+                      <span className="pct-k">NO</span>
+                      <span className="pct-n">{m.no_price}%</span>
+                    </span>
+                  </div>
+                  <div className="card-stats">
+                    <span>{formatCount(m.traders_count)} traders</span>
+                    <span>{formatCount(m.volume)} vol</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function Home() {
   return (
     <>
       <SiteNav />
-      <p className="muted" style={{ padding: "12px 24px" }}>
-        {/* {msg} */}
-      </p>
-      {markets === null ? (
-        <Loader />
-      ) : (
-        <>
-          <nav className="cats">
-            <Link href="/" className={!category ? "cat-active" : ""}>
-              Trending
-            </Link>
-            <Link href="/?category=Finance" className={category === "Finance" ? "cat-active" : ""}>
-              Finance
-            </Link>
-            <Link href="/?category=Sports" className={category === "Sports" ? "cat-active" : ""}>
-              Sports
-            </Link>
-            <Link href="/?category=Technology" className={category === "Technology" ? "cat-active" : ""}>
-              Technology
-            </Link>
-            <Link href="/?category=Entertainment" className={category === "Entertainment" ? "cat-active" : ""}>
-              Entertainment
-            </Link>
-            <Link href="/?category=Current affairs" className={category === "Current affairs" ? "cat-active" : ""}>
-              Current affairs
-            </Link>
-          </nav>
-          <div className="market-grid">
-            {markets.length === 0 && <p>No open markets yet.</p>}
-            {markets.map((m) => (
-              <Link href={`/markets/${m.id}`} className="card" key={m.id}>
-                <p className="live">● LIVE</p>
-                <h2>{m.question}</h2>
-                <p className="muted">{m.category}</p>
-                <p>
-                  <span className="pct-yes">YES {m.yes_price}%</span>
-                  <span className="pct-no">NO {m.no_price}%</span>
-                </p>
-                <p className="muted">
-                  {m.traders_count} traders · {m.volume} tokens
-                </p>
-              </Link>
-            ))}
-          </div>
-        </>
-      )}
+      <Suspense fallback={<Loader />}>
+        <HomeMarkets />
+      </Suspense>
     </>
   );
 }

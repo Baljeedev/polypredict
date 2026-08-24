@@ -2,10 +2,27 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
 
+function initials(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return String(name || "U").slice(0, 2).toUpperCase();
+}
+
+function formatTokens(n) {
+  return Number(n || 0).toLocaleString();
+}
+
 export default function SiteNav() {
+  const pathname = usePathname() || "/";
   const [wallet, setWallet] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [username, setUsername] = useState("");
@@ -42,37 +59,73 @@ export default function SiteNav() {
       });
   }, []);
 
+  function logout() {
+    localStorage.removeItem("token");
+    setWallet(null);
+    setUsername("");
+    setIsAdmin(false);
+  }
+
+  const onMarkets = pathname === "/" || pathname.startsWith("/markets");
+  const onPortfolio = pathname.startsWith("/portfolio");
+  const onAdmin = pathname.startsWith("/admin");
+
   return (
     <header className="nav">
-      <div>
-        <Link href="/" className="logo">Polypredict</Link>
-        <Link href="/">Markets</Link>
+      <div className="nav-left">
+        <Link href="/" className="logo">
+          <span className="logo-mark" aria-hidden="true" />
+          Polypredict
+        </Link>
+        <nav className="nav-links">
+          <Link href="/" className={`nav-link${onMarkets ? " on" : ""}`}>
+            Markets
+          </Link>
+          {wallet && (
+            <Link href="/portfolio" className={`nav-link${onPortfolio ? " on" : ""}`}>
+              Portfolio
+            </Link>
+          )}
+          {isAdmin && (
+            <Link href="/admin/dashboard" className={`nav-link${onAdmin ? " on" : ""}`}>
+              Admin
+            </Link>
+          )}
+        </nav>
       </div>
-      <div>
+
+      <div className="nav-right">
         {wallet ? (
-          <>
-            {username && (
-              <Link href="/portfolio">{username}</Link>
-            )}
-            <Link href="/portfolio">Portfolio</Link>
-            <span className="muted">{wallet.available} tokens</span>
-            {isAdmin && <Link href="/admin/dashboard">Admin</Link>}
-            <button
-              type="button"
-              className="btn-alt"
-              onClick={() => {
-                localStorage.removeItem("token");
-                setWallet(null);
-              }}
-            >
+          <div className="nav-dock">
+            <Link href="/portfolio" className="token-chip" title="Available balance">
+              <span className="token-orb" aria-hidden="true" />
+              <span className="token-copy">
+                <span className="token-value">{formatTokens(wallet.available)}</span>
+                <span className="token-label">tokens</span>
+              </span>
+            </Link>
+            <span className="nav-dock-split" aria-hidden="true" />
+            <Link href="/portfolio" className="user-chip" title="Open portfolio">
+              <span className="user-avatar">{initials(username || "U")}</span>
+              <span className="user-meta">
+                <span className="user-name">{username || "Trader"}</span>
+                <span className="user-role">{isAdmin ? "Admin" : "Trader"}</span>
+              </span>
+            </Link>
+            <span className="nav-dock-split" aria-hidden="true" />
+            <button type="button" className="btn-logout" onClick={logout}>
               Logout
             </button>
-          </>
+          </div>
         ) : (
-          <>
-            <Link href="/user/login" className="btn-alt">Log in</Link>
-            <Link href="/register" className="btn-green">Sign up</Link>
-          </>
+          <div className="nav-auth">
+            <Link href="/user/login" className="btn-alt">
+              Log in
+            </Link>
+            <Link href="/register" className="btn-green">
+              Sign up
+            </Link>
+          </div>
         )}
       </div>
     </header>
