@@ -23,7 +23,17 @@ Route::get('/markets', function (Request $request) {
 });
 
 Route::get('/markets/{market}', function (Market $market) {
-    return $market;
+    $data = $market->toArray();
+    $data['history'] = [];
+    try {
+        $market->ensurePriceHistory();
+        $data['history'] = $market->priceTicks()
+            ->orderBy('created_at')
+            ->get(['yes_price', 'no_price', 'volume', 'created_at']);
+    } catch (\Throwable $e) {
+        // ticks table may not be migrated yet
+    }
+    return $data;
 });
 
 
