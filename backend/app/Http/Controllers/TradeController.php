@@ -80,6 +80,8 @@ class TradeController extends Controller
             $pos->avg_price = (int) round($spent / $newShares);
             $pos->status = 'open';
             $pos->save();
+
+            $market->recordPriceTick();
         });
 
         return response()->json([
@@ -182,6 +184,8 @@ class TradeController extends Controller
                 $pos->tokens_spent = max(0, $spent - $tokensBack);
                 $pos->save();
             }
+
+            $market->recordPriceTick();
         });
 
         return response()->json([

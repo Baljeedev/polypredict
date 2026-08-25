@@ -42,6 +42,7 @@ class AdminMarketController extends Controller
         $data['no_price'] = 50;
 
         $market = Market::create($data);
+        $market->recordPriceTick();
 
         return response()->json($market, 201);
     }
