@@ -26,7 +26,7 @@ Route::get('/markets/{market}', function (Market $market) {
     return $market;
 });
 
-Route::post('/admin/markets/{market}/resolve', [AdminMarketController::class, 'resolve']);
+
 
 Route::get('/leaderboard', function () {
     return \App\Models\User::with('wallet')
@@ -101,7 +101,9 @@ Route::middleware('auth:sanctum')->group(function () {
         ];
     });
 
-    
+    Route::get('/wallet', function (Request $request) {
+        return $request->user()->wallet;
+    });
 
     Route::post('/wallet/claim', function (Request $request) {
         $wallet = $request->user()->wallet;

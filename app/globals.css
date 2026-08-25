@@ -2988,7 +2988,16 @@ button.btn-alt:active {
   background: var(--green);
 }
 
+.market-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
 
+.market-page .odds-track,
+.market-page .odds-row {
+  margin: 16px 0;
+}
 
 
 @media (max-width: 900px) {

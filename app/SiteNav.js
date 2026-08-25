@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-const API = process.env.NEXT_PUBLIC_API_URL;
+import apiBase from "./apiBase";
 
 function initials(name) {
   const parts = String(name || "")
@@ -26,10 +25,14 @@ export default function SiteNav() {
   const [wallet, setWallet] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [username, setUsername] = useState("");
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      setReady(true);
+      return;
+    }
 
     async function readJson(r) {
       const text = await r.text();
@@ -41,35 +44,38 @@ export default function SiteNav() {
       }
     }
 
+    const API = apiBase();
     const headers = {
       Accept: "application/json",
       Authorization: "Bearer " + token,
     };
 
-    fetch(`${API}/api/wallet`, { headers })
-      .then(readJson)
-      .then(setWallet);
-
-    fetch(`${API}/api/user`, { headers })
-      .then(readJson)
-      .then((u) => {
-        if (!u) return;
-        setIsAdmin(!!u.is_admin);
-        setUsername(u.username || u.name || "");
-      });
+    Promise.all([
+      fetch(`${API}/api/wallet`, { headers })
+        .then(readJson)
+        .then(setWallet)
+        .catch(() => null),
+      fetch(`${API}/api/user`, { headers })
+        .then(readJson)
+        .then((u) => {
+          if (!u) return;
+          setIsAdmin(!!u.is_admin);
+          setUsername(u.username || u.name || "");
+        })
+        .catch(() => null),
+    ]).finally(() => setReady(true));
   }, []);
 
   function logout() {
     localStorage.removeItem("token");
-    setWallet(null);
-    setUsername("");
-    setIsAdmin(false);
+    window.location.assign((process.env.NEXT_PUBLIC_BASE_PATH || "") + "/");
   }
 
   const onMarkets = pathname === "/" || pathname.startsWith("/markets");
   const onPortfolio = pathname.startsWith("/portfolio");
   const onBoard = pathname.startsWith("/leaderboard");
   const onAdmin = pathname.startsWith("/admin");
+  const showUserNav = ready && !isAdmin && (wallet || username);
 
   return (
     <header className="nav">
@@ -85,7 +91,7 @@ export default function SiteNav() {
           <Link href="/leaderboard" className={`nav-link${onBoard ? " on" : ""}`}>
             Leaderboard
           </Link>
-          {wallet && (
+          {showUserNav && (
             <Link href="/portfolio" className={`nav-link${onPortfolio ? " on" : ""}`}>
               Portfolio
             </Link>
@@ -99,12 +105,18 @@ export default function SiteNav() {
       </div>
 
       <div className="nav-right">
-        {wallet ? (
+        {!ready ? null : isAdmin ? (
+          <div className="nav-auth">
+            <Link href="/admin/dashboard" className="btn-alt">
+              Admin console
+            </Link>
+          </div>
+        ) : showUserNav ? (
           <div className="nav-dock">
             <Link href="/portfolio" className="token-chip" title="Available balance">
               <span className="token-orb" aria-hidden="true" />
               <span className="token-copy">
-                <span className="token-value">{formatTokens(wallet.available)}</span>
+                <span className="token-value">{formatTokens(wallet?.available)}</span>
                 <span className="token-label">tokens</span>
               </span>
             </Link>
@@ -113,7 +125,7 @@ export default function SiteNav() {
               <span className="user-avatar">{initials(username || "U")}</span>
               <span className="user-meta">
                 <span className="user-name">{username || "Trader"}</span>
-                <span className="user-role">{isAdmin ? "Admin" : "Trader"}</span>
+                <span className="user-role">Trader</span>
               </span>
             </Link>
             <span className="nav-dock-split" aria-hidden="true" />

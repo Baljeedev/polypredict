@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import SiteNav from "../SiteNav";
 import Loader from "../Loader";
+import apiBase from "../apiBase";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = apiBase();
 
 function formatCount(n) {
   return Number(n || 0).toLocaleString();

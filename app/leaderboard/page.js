@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import SiteNav from "../SiteNav";
 import Loader from "../Loader";
+import apiBase from "../apiBase";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = apiBase();
 
 function initials(name) {
   const parts = String(name || "")
@@ -99,11 +100,9 @@ export default function LeaderboardPage() {
                 <span className="user-avatar">{initials(r.username)}</span>
                 <b>{r.username}</b>
                 <strong>{formatTokens(r.tokens)}</strong>
-                <small>
-                {tab === "wealth"
-                    ? `${formatTokens(r.available)} free${r.committed ? ` · ${formatTokens(r.committed)} in play` : ""}`
-                    : `${r.available} won · ${r.committed} lost`}
-                </small>
+                <strong>
+                {tab === "wealth" ? formatTokens(r.tokens) : r.tokens + "%"}
+                </strong>
               </article>
             ))}
           </div>
@@ -125,8 +124,10 @@ export default function LeaderboardPage() {
                     {r.committed ? ` · ${formatTokens(r.committed)} in play` : ""}
                   </small>
                 </span>
-                <span className="board-tok">{formatTokens(r.tokens)}</span>
-              </li>
+                  <span className="board-tok">
+                    {tab === "wealth" ? formatTokens(r.tokens) : r.tokens + "%"}
+                </span>
+                </li>              
             ))}
           </ol>
         )}

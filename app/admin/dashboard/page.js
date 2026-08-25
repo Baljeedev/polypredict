@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Loader from "../../Loader";
+import apiBase from "../../apiBase";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = apiBase();
 
 const EMPTY_FORM = {
     question: "",

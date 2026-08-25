@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import SiteNav from "../../SiteNav";
 import Loader from "../../Loader";
+import apiBase from "../../apiBase";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = apiBase();
 
 function go(path) {
   window.location.assign((process.env.NEXT_PUBLIC_BASE_PATH || "") + path);
@@ -143,18 +144,30 @@ export default function Client({ id }) {
   return (
     <>
       <SiteNav />
-      <main className="card market-page">
-        <p className="muted">
-          {m.category} · {m.status}
-        </p>
+      <main className="market-page">
+        <p className="home-kicker">{m.category}</p>
         <h1>{m.question}</h1>
-        <p>
-          <span className="pct-yes">YES {m.yes_price}%</span>
-          <span className="pct-no">NO {m.no_price}%</span>
-        </p>
         <p className="muted">
-          {m.traders_count} traders · {m.volume} tokens · source: {m.resolution_source}
+          {m.status === "open" ? "LIVE" : m.status}
+          {" · "}
+          {m.traders_count} traders · {m.volume} vol
         </p>
+
+        <div className="odds-track" aria-hidden="true">
+          <span className="odds-fill-yes" style={{ width: `${m.yes_price}%` }} />
+        </div>
+        <div className="odds-row">
+          <span className="pct-yes">
+            <span className="pct-k">YES</span>
+            <span className="pct-n">{m.yes_price}%</span>
+          </span>
+          <span className="pct-no">
+            <span className="pct-k">NO</span>
+            <span className="pct-n">{m.no_price}%</span>
+          </span>
+        </div>
+
+        <p className="muted">Source: {m.resolution_source}</p>
         <p>{m.resolution_rules}</p>
 
         {m.status === "resolved" ? (
