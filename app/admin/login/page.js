@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import apiBase from "../../apiBase";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = apiBase();
 
 function EyeIcon({ off }) {
     if (off) {

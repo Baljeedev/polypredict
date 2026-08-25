@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-
-const API = process.env.NEXT_PUBLIC_API_URL;
+import apiBase from "../../apiBase";
 
 function EyeIcon({ off }) {
     if (off) {
@@ -35,14 +34,19 @@ export default function UserLoginPage() {
         setMessage("");
         setLoading(true);
         try {
+            const API = apiBase();
             const res = await fetch(`${API}/api/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Accept: "application/json" },
                 body: JSON.stringify({ email, password }),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-                setMessage("Login failed. Check your email and password.");
+                setMessage(data.message || "Login failed. Check your email and password.");
+                return;
+            }
+            if (!data.token) {
+                setMessage("Could not reach the server. Try again.");
                 return;
             }
             localStorage.setItem("token", data.token);

@@ -23,6 +23,7 @@ class Market extends Model
         'no_price',
         'traders_count',
         'volume',
+        'winner',
     ];
     protected $casts = [
         'closes_at' => 'datetime',

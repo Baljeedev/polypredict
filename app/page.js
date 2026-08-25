@@ -5,11 +5,9 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import SiteNav from "./SiteNav";
 import Loader from "./Loader";
+import apiBase from "./apiBase";
 
-const API =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://pixxelu.com/dev/predict/backend/public";
-
+const API = apiBase();
 const CATEGORIES = [
   { href: "/", label: "Trending", value: "" },
   { href: "/?category=Finance", label: "Finance", value: "Finance" },

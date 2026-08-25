@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Loader from "../../Loader";
+import apiBase from "../../apiBase";
 
-const API = process.env.NEXT_PUBLIC_API_URL;
+const API = apiBase();
 
 const EMPTY_FORM = {
     question: "",
@@ -182,6 +183,30 @@ export default function AdminDashboardPage() {
         setView("markets");
         loadMarkets();
     }
+
+    async function resolveMarket(id, outcome) {
+        const label = outcome === "yes" ? "YES" : "NO";
+        if (!window.confirm("Declare " + label + " the winner for market #" + id + "?")) {
+            return;
+        }
+        const res = await fetch(`${API}/api/admin/markets/${id}/resolve`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+                Authorization: "Bearer " + token(),
+            },
+            body: JSON.stringify({ outcome }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            setMessage(JSON.stringify(data.errors || data.message || data));
+            return;
+        }
+        setMessage("Market #" + id + " resolved: " + label);
+        loadMarkets();
+    }
+
 
     function logout() {
         localStorage.removeItem("token");
@@ -606,6 +631,26 @@ export default function AdminDashboardPage() {
                                                     <Link href={`/markets/${m.id}`} className="adash-row-link">
                                                         View
                                                     </Link>
+                                                    {m.status === "open" && (
+                                                        <>
+                                                            {" "}
+                                                            <button
+                                                                type="button"
+                                                                className="btn-yes"
+                                                                onClick={() => resolveMarket(m.id, "yes")}
+                                                            >
+                                                                YES won
+                                                            </button>
+                                                            {" "}
+                                                            <button
+                                                                type="button"
+                                                                className="btn-no"
+                                                                onClick={() => resolveMarket(m.id, "no")}
+                                                            >
+                                                                NO won
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}

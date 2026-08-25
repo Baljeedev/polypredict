@@ -7,4 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class Wallet extends Model
 {
     protected $fillable = ['user_id', 'available', 'committed', 'ad_tokens'];
+
+    protected $casts = [
+        'last_claim_at' => 'datetime',
+    ];
 }
