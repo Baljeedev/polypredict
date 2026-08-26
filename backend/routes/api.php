@@ -9,9 +9,7 @@ use App\Http\Controllers\TradeController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('/markets', function () {
-    return Market::where('status', 'open')->orderBy('closes_at')->get();
-});
+
 Route::get('/markets', function (Request $request) {
     $query = Market::where('status', 'open')->orderBy('closes_at');
 
@@ -35,6 +33,8 @@ Route::get('/markets/{market}', function (Market $market) {
     }
     return $data;
 });
+
+Route::post('/markets/{market}/preview', [TradeController::class, 'preview']);
 
 
 
@@ -111,6 +111,34 @@ Route::middleware('auth:sanctum')->group(function () {
         ];
     });
 
+    Route::get('/profile', function (Request $request) {
+        $user = $request->user();
+        $history = $user->positions()->with('market')->latest()->get()->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'market_id' => $p->market_id,
+                'question' => $p->market?->question,
+                'outcome' => $p->outcome,
+                'shares' => round((float) $p->shares, 4),
+                'tokens_spent' => (int) $p->tokens_spent,
+                'avg_price' => (int) $p->avg_price,
+                'status' => $p->status,
+                'max_payout' => (int) round((float) $p->shares * 100),
+            ];
+        });
+
+        return [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+            ],
+            'wallet' => $user->wallet,
+            'history' => $history,
+        ];
+    });
+
     Route::get('/wallet', function (Request $request) {
         return $request->user()->wallet;
     });
@@ -149,5 +177,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/markets', [AdminMarketController::class, 'store']);
     Route::post('/admin/markets/{market}/resolve', [AdminMarketController::class, 'resolve']);
     Route::post('/markets/{market}/buy', [TradeController::class, 'buy']);
+
     Route::post('/markets/{market}/sell', [TradeController::class, 'sell']);
 });

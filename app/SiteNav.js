@@ -73,6 +73,7 @@ export default function SiteNav() {
 
   const onMarkets = pathname === "/" || pathname.startsWith("/markets");
   const onPortfolio = pathname.startsWith("/portfolio");
+  const onProfile = pathname.startsWith("/profile");
   const onBoard = pathname.startsWith("/leaderboard");
   const onAdmin = pathname.startsWith("/admin");
   const showUserNav = ready && !isAdmin && (wallet || username);
@@ -95,7 +96,11 @@ export default function SiteNav() {
             <Link href="/portfolio" className={`nav-link${onPortfolio ? " on" : ""}`}>
               Portfolio
             </Link>
+            
           )}
+          <Link href="/profile" className={`nav-link${onProfile ? " on" : ""}`}>
+            Profile
+          </Link>
           {isAdmin && (
             <Link href="/admin/dashboard" className={`nav-link${onAdmin ? " on" : ""}`}>
               Admin
