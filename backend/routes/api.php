@@ -10,6 +10,10 @@ use App\Http\Controllers\TradeController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::get('/auth/google', [AuthController::class, 'googleRedirect']);
+Route::get('/auth/google/callback', [AuthController::class, 'googleCallback']);
+
+
 Route::get('/markets', function (Request $request) {
     $query = Market::where('status', 'open')->orderBy('closes_at');
 

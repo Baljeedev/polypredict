@@ -3337,6 +3337,16 @@ button.btn-alt:active {
   gap: 10px;
 }
 
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-google svg {
+  flex-shrink: 0;
+}
 
 @media (max-width: 860px) {
   .mkt {
