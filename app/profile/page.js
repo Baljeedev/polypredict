@@ -82,6 +82,7 @@ export default function ProfilePage() {
   const u = data.user || {};
   const w = data.wallet || {};
   const rows = data.history || [];
+  const badges = data.badges || [];
   const display = u.username || u.name || "Trader";
 
   return (
@@ -98,6 +99,23 @@ export default function ProfilePage() {
             {u.name && u.username ? <p className="profile-name">{u.name}</p> : null}
             <p className="muted">{u.email}</p>
           </div>
+        </section>
+
+        <section className="profile-badges">
+          <h2>Achievements</h2>
+          {badges.length === 0 ? (
+            <p className="muted">Win a resolved market to earn a category badge.</p>
+          ) : (
+            <ul>
+              {badges.map((b) => (
+                <li key={b.category} className={b.level === "Expert" ? "is-expert" : ""}>
+                  <b>{b.category}</b>
+                  <span>{b.level}</span>
+                  <small>{b.rate}% · {b.won}/{b.total}</small>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <div className="profile-stats">

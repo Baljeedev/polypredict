@@ -142,7 +142,7 @@ export default function PortfolioPage() {
 
         <div className="port-section">
           <h2>Daily reward</h2>
-          <p className="muted">Once per day: +50 tokens. No real money.</p>
+          <p className="muted">Once per day: +50 tokens. Virtual tokens only.</p>
           <button
             type="button"
             className="btn-green"
@@ -159,7 +159,7 @@ export default function PortfolioPage() {
           {rows.length === 0 ? (
             <div className="port-empty">
               <p>No open positions yet. Buy YES or NO on a live market.</p>
-              <Link href="/" className="btn-green">
+              <Link href="/" className="btn-claim">
                 Browse markets
               </Link>
             </div>

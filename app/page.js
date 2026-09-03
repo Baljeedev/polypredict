@@ -7,6 +7,7 @@ import SiteNav from "./SiteNav";
 import Loader from "./Loader";
 import apiBase from "./apiBase";
 
+
 const API = apiBase();
 const CATEGORIES = [
   { href: "/", label: "Trending", value: "" },
@@ -207,7 +208,7 @@ function HomeMarkets() {
 export default function Home() {
   return (
     <>
-      <SiteNav />
+      <SiteNav />      
       <Suspense fallback={<Loader />}>
         <HomeMarkets />
       </Suspense>

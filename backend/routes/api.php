@@ -65,10 +65,17 @@ Route::get('/leaderboard', function () {
         ->values();
 });
 
-Route::get('/leaderboard/experts', function () {
-    return \App\Models\User::with('positions')->get()
-        ->map(function ($u) {
+Route::get('/leaderboard/experts', function (Request $request) {
+    $category = $request->query('category');
+
+    return \App\Models\User::with(['positions.market'])->get()
+        ->map(function ($u) use ($category) {
             $settled = $u->positions->whereIn('status', ['won', 'lost']);
+            if ($category) {
+                $settled = $settled->filter(function ($p) use ($category) {
+                    return $p->market && $p->market->category === $category;
+                });
+            }
             $won = $settled->where('status', 'won')->count();
             $lost = $settled->where('status', 'lost')->count();
             $total = $won + $lost;
@@ -91,6 +98,75 @@ Route::get('/leaderboard/experts', function () {
             return $row;
         })
         ->values();
+});
+
+Route::get('/traders', function (Request $request) {
+    $q = trim((string) $request->query('q', ''));
+    if (strlen($q) < 2) {
+        return [];
+    }
+
+    return \App\Models\User::query()
+        ->where(function ($query) use ($q) {
+            $query->where('username', 'like', '%'.$q.'%')
+                ->orWhere('name', 'like', '%'.$q.'%');
+        })
+        ->orderBy('username')
+        ->limit(15)
+        ->get(['id', 'name', 'username'])
+        ->map(function ($u) {
+            return [
+                'name' => $u->name,
+                'username' => $u->username,
+            ];
+        })
+        ->values();
+});
+
+Route::get('/traders/{username}', function (string $username) {
+    $user = \App\Models\User::query()->where('username', $username)->first();
+    if (! $user) {
+        return response()->json(['message' => 'Not found'], 404);
+    }
+
+    $history = $user->positions()->with('market')->latest()->get()->map(function ($p) {
+        return [
+            'id' => $p->id,
+            'market_id' => $p->market_id,
+            'question' => $p->market?->question,
+            'outcome' => $p->outcome,
+            'status' => $p->status,
+        ];
+    });
+
+    $badges = $user->positions()->with('market')
+        ->whereIn('status', ['won', 'lost'])
+        ->get()
+        ->groupBy(function ($p) {
+            return $p->market->category ?? 'Other';
+        })
+        ->map(function ($rows, $category) {
+            $won = $rows->where('status', 'won')->count();
+            $total = $rows->count();
+            $rate = (int) round($won / $total * 100);
+            return [
+                'category' => $category,
+                'won' => $won,
+                'total' => $total,
+                'rate' => $rate,
+                'level' => $rate >= 60 ? 'Expert' : 'Trader',
+            ];
+        })
+        ->values();
+
+    return [
+        'user' => [
+            'name' => $user->name,
+            'username' => $user->username,
+        ],
+        'badges' => $badges,
+        'history' => $history,
+    ];
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -131,6 +207,26 @@ Route::middleware('auth:sanctum')->group(function () {
             ];
         });
 
+        $badges = $user->positions()->with('market')
+            ->whereIn('status', ['won', 'lost'])
+            ->get()
+            ->groupBy(function ($p) {
+                return $p->market->category ?? 'Other';
+            })
+            ->map(function ($rows, $category) {
+                $won = $rows->where('status', 'won')->count();
+                $total = $rows->count();
+                $rate = (int) round($won / $total * 100);
+                return [
+                    'category' => $category,
+                    'won' => $won,
+                    'total' => $total,
+                    'rate' => $rate,
+                    'level' => $rate >= 60 ? 'Expert' : 'Trader',
+                ];
+            })
+            ->values();
+
         return [
             'user' => [
                 'id' => $user->id,
@@ -140,6 +236,7 @@ Route::middleware('auth:sanctum')->group(function () {
             ],
             'wallet' => $user->wallet,
             'history' => $history,
+            'badges' => $badges,
         ];
     });
 
