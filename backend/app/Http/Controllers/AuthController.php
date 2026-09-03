@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -55,5 +57,53 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out']);
+    }
+
+    public function googleRedirect()
+    {
+        return Socialite::driver('google')->stateless()->redirect();
+    }
+
+    public function googleCallback()
+    {
+        try {
+            $google = Socialite::driver('google')->stateless()->user();
+
+            $user = User::query()->where('email', $google->getEmail())->first();
+
+            if (! $user) {
+                $base = substr(preg_replace('/[^A-Za-z0-9_]/', '', explode('@', (string) $google->getEmail())[0]), 0, 20);
+                if ($base === '') {
+                    $base = 'user';
+                }
+                $username = $base;
+                $i = 0;
+                while (User::query()->where('username', $username)->exists()) {
+                    $i++;
+                    $username = $base.$i;
+                }
+
+                $user = User::create([
+                    'name' => $google->getName() ?: $username,
+                    'username' => $username,
+                    'email' => $google->getEmail(),
+                    'password' => Hash::make(Str::random(32)),
+                ]);
+                $user->wallet()->create([
+                    'available' => 1000,
+                    'committed' => 0,
+                    'ad_tokens' => 0,
+                ]);
+            }
+
+            $token = $user->createToken('auth')->plainTextToken;
+            $front = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+
+            return redirect($front.'/auth/google/callback/?token='.urlencode($token));
+        } catch (\Throwable $e) {
+            $front = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+
+            return redirect($front.'/user/login/?google_error='.urlencode($e->getMessage()));
+        }
     }
 }

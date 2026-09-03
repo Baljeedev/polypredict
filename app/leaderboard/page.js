@@ -6,6 +6,14 @@ import Loader from "../Loader";
 import apiBase from "../apiBase";
 
 const API = apiBase();
+const EXPERT_CATS = [
+  { label: "All", value: "" },
+  { label: "Finance", value: "Finance" },
+  { label: "Sports", value: "Sports" },
+  { label: "Technology", value: "Technology" },
+  { label: "Entertainment", value: "Entertainment" },
+  { label: "Current affairs", value: "Current affairs" },
+];
 
 function initials(name) {
   const parts = String(name || "")
@@ -27,21 +35,23 @@ export default function LeaderboardPage() {
   const [me, setMe] = useState("");
   const [err, setErr] = useState("");
   const [tab, setTab] = useState("wealth");
+  const [expertCat, setExpertCat] = useState("");
 
   useEffect(() => {
     setRows(null);
-    const url =
-        tab === "experts"
-        ? `${API}/api/leaderboard/experts`
-        : `${API}/api/leaderboard`;
+    let url = `${API}/api/leaderboard`;
+    if (tab === "experts") {
+      url = `${API}/api/leaderboard/experts`;
+      if (expertCat) url += `?category=${encodeURIComponent(expertCat)}`;
+    }
     fetch(url)
-        .then((r) => {
+      .then((r) => {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
-        })
-        .then(setRows)
-        .catch((e) => setErr(e.message || "Failed"));
-    }, [tab]);
+      })
+      .then(setRows)
+      .catch((e) => setErr(e.message || "Failed"));
+  }, [tab, expertCat]);
 
   if (err) return <p className="muted market-page">{err}</p>;
   if (!rows) {
@@ -66,28 +76,50 @@ export default function LeaderboardPage() {
           <h1>Leaderboard</h1>
           <p>
             {tab === "wealth"
-                ? "Ranked by total tokens (wallet + tokens in open trades). Nav shows spendable only."
+              ? "Ranked by total tokens (wallet + tokens in open trades)."
+              : expertCat
+                ? `Experts in ${expertCat} — how often they were right after resolve.`
                 : "Ranked by how often a trader was right after a market is resolved."}
-            </p>
+          </p>
+          <nav className="cats board-tabs">
+            <button
+              type="button"
+              className={tab === "wealth" ? "cat-active" : ""}
+              onClick={() => setTab("wealth")}
+            >
+              Wealth
+            </button>
+            <button
+              type="button"
+              className={tab === "experts" ? "cat-active" : ""}
+              onClick={() => setTab("experts")}
+            >
+              Experts
+            </button>
+          </nav>
+          {tab === "experts" ? (
             <nav className="cats board-tabs">
-            <button
-                type="button"
-                className={tab === "wealth" ? "cat-active" : ""}
-                onClick={() => setTab("wealth")}
-            >
-                Wealth
-            </button>
-            <button
-                type="button"
-                className={tab === "experts" ? "cat-active" : ""}
-                onClick={() => setTab("experts")}
-            >
-                Experts
-            </button>
+              {EXPERT_CATS.map((c) => (
+                <button
+                  key={c.value || "all"}
+                  type="button"
+                  className={expertCat === c.value ? "cat-active" : ""}
+                  onClick={() => setExpertCat(c.value)}
+                >
+                  {c.label}
+                </button>
+              ))}
             </nav>
+          ) : null}
         </section>
 
-        {rows.length === 0 && <p className="muted">No traders yet.</p>}
+        {rows.length === 0 && (
+          <p className="muted">
+            {tab === "experts"
+              ? "No experts here yet. Resolve a market in this category first."
+              : "No traders yet."}
+          </p>
+        )}
 
         {top.length > 0 && (
           <div className="board-podium">
@@ -99,9 +131,8 @@ export default function LeaderboardPage() {
                 <span className="board-medal">#{r.rank}</span>
                 <span className="user-avatar">{initials(r.username)}</span>
                 <b>{r.username}</b>
-                <strong>{formatTokens(r.tokens)}</strong>
                 <strong>
-                {tab === "wealth" ? formatTokens(r.tokens) : r.tokens + "%"}
+                  {tab === "wealth" ? formatTokens(r.tokens) : r.tokens + "%"}
                 </strong>
               </article>
             ))}
@@ -118,16 +149,19 @@ export default function LeaderboardPage() {
                 <span className="board-rank">{r.rank}</span>
                 <span className="user-avatar">{initials(r.username)}</span>
                 <span className="board-who">
-                  <b>{r.username}</b>
+                  <b>
+                    <Link href={`/traders?u=${encodeURIComponent(r.username)}`}>{r.username}</Link>
+                  </b>
                   <small>
-                    {formatTokens(r.available)} free
-                    {r.committed ? ` · ${formatTokens(r.committed)} in play` : ""}
+                    {tab === "wealth"
+                      ? `${formatTokens(r.available)} free${r.committed ? ` · ${formatTokens(r.committed)} in play` : ""}`
+                      : `${r.available} won · ${r.committed} lost`}
                   </small>
                 </span>
-                  <span className="board-tok">
-                    {tab === "wealth" ? formatTokens(r.tokens) : r.tokens + "%"}
+                <span className="board-tok">
+                  {tab === "wealth" ? formatTokens(r.tokens) : r.tokens + "%"}
                 </span>
-                </li>              
+              </li>
             ))}
           </ol>
         )}

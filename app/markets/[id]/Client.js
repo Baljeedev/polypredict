@@ -103,6 +103,8 @@ export default function Client({ id }) {
   const [wallet, setWallet] = useState(null);
   const [posYes, setPosYes] = useState(null);
   const [posNo, setPosNo] = useState(null);
+  const [preview, setPreview] = useState(null);
+
 
   function applyMarket(data) {
     setM(data);
@@ -165,6 +167,37 @@ export default function Client({ id }) {
     go("/user/login/");
   }
 
+  async function openPreview() {
+    setMsg("");
+    if (!loggedIn) {
+      needLogin();
+      return;
+    }
+    if (amount < 1) {
+      setMsg("Enter an amount to buy.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/api/markets/${id}/preview`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ outcome: side, tokens: amount }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMsg(data.message || "Could not preview trade.");
+        return;
+      }
+      setPreview(data);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function buy() {
     setMsg("");
     const token = localStorage.getItem("token");
@@ -216,6 +249,7 @@ export default function Client({ id }) {
       if (data.position?.outcome === "yes") setPosYes(data.position);
       if (data.position?.outcome === "no") setPosNo(data.position);
       setMsg("Trade placed.");
+      setPreview(null);
     } finally {
       setBusy(false);
     }
@@ -314,10 +348,10 @@ export default function Client({ id }) {
             </div>
             <div className="mkt-buy-row">
               <button type="button" className="mkt-buy-yes" onClick={() => setSide("yes")}>
-                Buy Yes {m.yes_price}¢
+                Buy Yes {m.yes_price} tokens
               </button>
               <button type="button" className="mkt-buy-no" onClick={() => setSide("no")}>
-                Buy No {m.no_price}¢
+                Buy No {m.no_price} tokens
               </button>
             </div>
           </div>
@@ -383,7 +417,7 @@ export default function Client({ id }) {
                   To win <b>{formatMoney(toWin)}</b>
                 </p>
                 <small>
-                  Est. cash back if {side.toUpperCase()} wins · {price}¢
+                  Est. return if {side.toUpperCase()} wins · {price} tokens
                 </small>
               </div>
 
@@ -391,7 +425,7 @@ export default function Client({ id }) {
                 type="button"
                 className={`mkt-trade ${side}`}
                 disabled={busy || m.status !== "open"}
-                onClick={loggedIn ? buy : needLogin}
+                onClick={loggedIn ? openPreview : needLogin}
               >
                 {busy ? "Trading…" : loggedIn ? "Trade" : "Log in to trade"}
               </button>
@@ -424,6 +458,38 @@ export default function Client({ id }) {
           )}
         </aside>
       </main>
+
+
+      {preview && (
+        <div className="mkt-modal-bg" onClick={() => setPreview(null)}>
+          <div className="mkt-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Confirm trade</h3>
+            <p className="muted">
+              Buy {side.toUpperCase()} · {amount} tokens
+            </p>
+            <ul className="mkt-modal-list">
+              <li>Shares <b>{preview.shares}</b></li>
+              <li>Avg price <b>{preview.avg_price} tokens</b></li>
+              <li>If you win <b>{preview.max_payout} tokens</b></li>
+              <li>Profit <b>{preview.profit} tokens</b></li>
+              <li>If you lose <b>{preview.loss} tokens</b></li>
+              <li>
+                New price <b>YES {preview.new_yes_price}%</b> · <b>NO {preview.new_no_price}%</b>
+              </li>
+            </ul>
+            <div className="mkt-modal-btns">
+              <button type="button" className="btn-alt" onClick={() => setPreview(null)}>
+                Cancel
+              </button>
+              <button type="button" className={`mkt-trade ${side}`} disabled={busy} onClick={buy}>
+                {busy ? "Trading…" : "Confirm"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
     </>
   );
 }

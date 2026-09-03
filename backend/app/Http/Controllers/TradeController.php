@@ -91,6 +91,55 @@ class TradeController extends Controller
         ]);
     }
 
+
+    public function preview(Request $request, Market $market)
+    {
+        $data = $request->validate([
+            'outcome' => 'required|in:yes,no',
+            'tokens' => 'required|integer|min:1',
+        ]);
+
+        if ($market->status !== 'open') {
+            throw ValidationException::withMessages(['market' => ['Market is not open.']]);
+        }
+
+        $tokens = (int) $data['tokens'];
+        $outcome = $data['outcome'];
+        $b = max(1, (int) $market->b);
+        $qYes = (float) $market->q_yes;
+        $qNo = (float) $market->q_no;
+
+        $shares = $this->sharesForSpend($qYes, $qNo, $b, $outcome, $tokens);
+
+        if ($shares <= 0) {
+            throw ValidationException::withMessages(['tokens' => ['Trade too small.']]);
+        }
+
+        if ($outcome === 'yes') {
+            $qYes += $shares;
+        } else {
+            $qNo += $shares;
+        }
+
+        [$yesPrice, $noPrice] = $this->prices($qYes, $qNo, $b);
+        $maxPayout = (int) round($shares * 100);
+        $avgPrice = (int) round($tokens / $shares);
+        $profit = $maxPayout - $tokens;
+
+        return response()->json([
+            'shares' => round($shares, 4),
+            'avg_price' => $avgPrice,
+            'max_payout' => $maxPayout,
+            'profit' => $profit,
+            'loss' => $tokens,
+            'new_yes_price' => $yesPrice,
+            'new_no_price' => $noPrice,
+            'current_yes_price' => (int) $market->yes_price,
+            'current_no_price' => (int) $market->no_price,
+        ]);
+    }
+
+
     private function prices(int $qYes, int $qNo, int $b): array
     {
         $pYes = 100 / (1 + exp(($qNo - $qYes) / $b));

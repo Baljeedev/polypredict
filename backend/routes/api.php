@@ -9,9 +9,11 @@ use App\Http\Controllers\TradeController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('/markets', function () {
-    return Market::where('status', 'open')->orderBy('closes_at')->get();
-});
+
+Route::get('/auth/google', [AuthController::class, 'googleRedirect']);
+Route::get('/auth/google/callback', [AuthController::class, 'googleCallback']);
+
+
 Route::get('/markets', function (Request $request) {
     $query = Market::where('status', 'open')->orderBy('closes_at');
 
@@ -35,6 +37,8 @@ Route::get('/markets/{market}', function (Market $market) {
     }
     return $data;
 });
+
+Route::post('/markets/{market}/preview', [TradeController::class, 'preview']);
 
 
 
@@ -61,10 +65,17 @@ Route::get('/leaderboard', function () {
         ->values();
 });
 
-Route::get('/leaderboard/experts', function () {
-    return \App\Models\User::with('positions')->get()
-        ->map(function ($u) {
+Route::get('/leaderboard/experts', function (Request $request) {
+    $category = $request->query('category');
+
+    return \App\Models\User::with(['positions.market'])->get()
+        ->map(function ($u) use ($category) {
             $settled = $u->positions->whereIn('status', ['won', 'lost']);
+            if ($category) {
+                $settled = $settled->filter(function ($p) use ($category) {
+                    return $p->market && $p->market->category === $category;
+                });
+            }
             $won = $settled->where('status', 'won')->count();
             $lost = $settled->where('status', 'lost')->count();
             $total = $won + $lost;
@@ -89,6 +100,75 @@ Route::get('/leaderboard/experts', function () {
         ->values();
 });
 
+Route::get('/traders', function (Request $request) {
+    $q = trim((string) $request->query('q', ''));
+    if (strlen($q) < 2) {
+        return [];
+    }
+
+    return \App\Models\User::query()
+        ->where(function ($query) use ($q) {
+            $query->where('username', 'like', '%'.$q.'%')
+                ->orWhere('name', 'like', '%'.$q.'%');
+        })
+        ->orderBy('username')
+        ->limit(15)
+        ->get(['id', 'name', 'username'])
+        ->map(function ($u) {
+            return [
+                'name' => $u->name,
+                'username' => $u->username,
+            ];
+        })
+        ->values();
+});
+
+Route::get('/traders/{username}', function (string $username) {
+    $user = \App\Models\User::query()->where('username', $username)->first();
+    if (! $user) {
+        return response()->json(['message' => 'Not found'], 404);
+    }
+
+    $history = $user->positions()->with('market')->latest()->get()->map(function ($p) {
+        return [
+            'id' => $p->id,
+            'market_id' => $p->market_id,
+            'question' => $p->market?->question,
+            'outcome' => $p->outcome,
+            'status' => $p->status,
+        ];
+    });
+
+    $badges = $user->positions()->with('market')
+        ->whereIn('status', ['won', 'lost'])
+        ->get()
+        ->groupBy(function ($p) {
+            return $p->market->category ?? 'Other';
+        })
+        ->map(function ($rows, $category) {
+            $won = $rows->where('status', 'won')->count();
+            $total = $rows->count();
+            $rate = (int) round($won / $total * 100);
+            return [
+                'category' => $category,
+                'won' => $won,
+                'total' => $total,
+                'rate' => $rate,
+                'level' => $rate >= 60 ? 'Expert' : 'Trader',
+            ];
+        })
+        ->values();
+
+    return [
+        'user' => [
+            'name' => $user->name,
+            'username' => $user->username,
+        ],
+        'badges' => $badges,
+        'history' => $history,
+    ];
+});
+
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/user', function (Request $request) {
@@ -108,6 +188,55 @@ Route::middleware('auth:sanctum')->group(function () {
         return [
             'wallet' => $user->wallet,
             'positions' => $positions,
+        ];
+    });
+
+    Route::get('/profile', function (Request $request) {
+        $user = $request->user();
+        $history = $user->positions()->with('market')->latest()->get()->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'market_id' => $p->market_id,
+                'question' => $p->market?->question,
+                'outcome' => $p->outcome,
+                'shares' => round((float) $p->shares, 4),
+                'tokens_spent' => (int) $p->tokens_spent,
+                'avg_price' => (int) $p->avg_price,
+                'status' => $p->status,
+                'max_payout' => (int) round((float) $p->shares * 100),
+            ];
+        });
+
+        $badges = $user->positions()->with('market')
+            ->whereIn('status', ['won', 'lost'])
+            ->get()
+            ->groupBy(function ($p) {
+                return $p->market->category ?? 'Other';
+            })
+            ->map(function ($rows, $category) {
+                $won = $rows->where('status', 'won')->count();
+                $total = $rows->count();
+                $rate = (int) round($won / $total * 100);
+                return [
+                    'category' => $category,
+                    'won' => $won,
+                    'total' => $total,
+                    'rate' => $rate,
+                    'level' => $rate >= 60 ? 'Expert' : 'Trader',
+                ];
+            })
+            ->values();
+
+        return [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'username' => $user->username,
+                'email' => $user->email,
+            ],
+            'wallet' => $user->wallet,
+            'history' => $history,
+            'badges' => $badges,
         ];
     });
 
@@ -149,5 +278,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/markets', [AdminMarketController::class, 'store']);
     Route::post('/admin/markets/{market}/resolve', [AdminMarketController::class, 'resolve']);
     Route::post('/markets/{market}/buy', [TradeController::class, 'buy']);
+
     Route::post('/markets/{market}/sell', [TradeController::class, 'sell']);
 });
