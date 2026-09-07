@@ -23,6 +23,132 @@ function formatCount(n) {
   return num.toLocaleString();
 }
 
+function formatScore(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "0";
+  return num % 1 === 0 ? String(num) : num.toFixed(1);
+}
+
+function ExpertPulse({ topic }) {
+  const [rows, setRows] = useState(null);
+  const [me, setMe] = useState("");
+
+  useEffect(() => {
+    setRows(null);
+    const url = topic
+      ? `${API}/api/leaderboard/experts?category=${encodeURIComponent(topic)}&limit=200`
+      : `${API}/api/leaderboard/experts?limit=200`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setRows(Array.isArray(data) ? data : []))
+      .catch(() => setRows([]));
+  }, [topic]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    fetch(`${API}/api/user`, {
+      headers: { Accept: "application/json", Authorization: "Bearer " + token },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u?.username || u?.name) setMe(u.username || u.name);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!rows || rows.length === 0) return null;
+
+  const label = topic || "these markets";
+  const top = rows.slice(0, 2);
+  const mine = me
+    ? rows.find((r) => String(r.username).toLowerCase() === String(me).toLowerCase())
+    : null;
+
+  return (
+    <section className="home-pulse">
+      <div className="home-pulse-head">
+        <div>
+          <p className="home-kicker">{topic ? `${topic} experts` : "Top experts"}</p>
+          <h2>Who actually knows {label}?</h2>
+        </div>
+        <Link href="/leaderboard" className="home-pulse-link">
+          Full board →
+        </Link>
+      </div>
+      <ol className="home-pulse-list">
+        {top.map((r) => (
+          <li key={r.username}>
+            <span className="home-pulse-rank">#{r.rank}</span>
+            <Link href={`/traders?u=${encodeURIComponent(r.username)}`}>
+              @{r.username}
+            </Link>
+            <span className="home-pulse-score">
+              {r.rank === 1 ? "Expert Score " : ""}
+              {formatScore(r.score ?? r.tokens)}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="home-pulse-you">
+        {mine
+          ? `Your rank: #${mine.rank}`
+          : me
+            ? `Your rank: settle a ${topic || "live"} market to appear here.`
+            : "Log in to see your rank."}
+      </p>
+    </section>
+  );
+}
+
+function MarketCard({ m, i = 0 }) {
+  return (
+    <Link href={`/markets/${m.id}`} className="card" style={{ "--i": i }}>
+      <div className="card-head">
+        <p className="live">LIVE</p>
+        <span className="card-cat">{m.category}</span>
+      </div>
+      <h2>{m.question}</h2>
+      <div className="odds-track" aria-hidden="true">
+        <span className="odds-fill-yes" style={{ width: `${m.yes_price}%` }} />
+      </div>
+      <div className="odds-row">
+        <span className="pct-yes">
+          <span className="pct-k">YES</span>
+          <span className="pct-n">{m.yes_price}%</span>
+        </span>
+        <span className="pct-no">
+          <span className="pct-k">NO</span>
+          <span className="pct-n">{m.no_price}%</span>
+        </span>
+      </div>
+      <div className="card-stats">
+        <span>{formatCount(m.traders_count)} traders</span>
+        <span>{formatCount(m.volume)} vol</span>
+      </div>
+    </Link>
+  );
+}
+
+function SideList({ title, items }) {
+  if (!items.length) return null;
+  return (
+    <section className="home-side-box">
+      <h3>{title}</h3>
+      <ul>
+        {items.map((m) => (
+          <li key={title + m.id}>
+            <Link href={`/markets/${m.id}`}>
+              <b>{m.question}</b>
+              <span>{m.yes_price}%</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function HomeMarkets() {
   const searchParams = useSearchParams();
   const category = searchParams.get("category") || "";
@@ -51,6 +177,22 @@ function HomeMarkets() {
     markets && category
       ? markets.filter((m) => m.category === category)
       : markets;
+
+  const catBlocks = CATEGORIES.filter((c) => c.value).map((c) => ({
+    ...c,
+    items: (markets || []).filter((m) => m.category === c.value),
+  })).filter((c) => c.items.length > 0);
+
+  const trending = [...(markets || [])]
+    .sort((a, b) => (Number(b.traders_count) || 0) - (Number(a.traders_count) || 0))
+    .slice(0, 5);
+  const movers = [...(markets || [])]
+    .sort((a, b) => Math.abs((Number(b.yes_price) || 50) - 50) - Math.abs((Number(a.yes_price) || 50) - 50))
+    .slice(0, 5);
+  const newest = [...(markets || [])].sort((a, b) => b.id - a.id).slice(0, 5);
+  const hottest = [...(markets || [])]
+    .sort((a, b) => (Number(b.volume) || 0) - (Number(a.volume) || 0))
+    .slice(0, 5);
 
   return (
     <div className="home-shell">
@@ -162,43 +304,62 @@ function HomeMarkets() {
             </Link>
           ))}
         </nav>
-        {visible === null ? (
+
+        <ExpertPulse topic={category} />
+
+        {markets === null ? (
           <Loader />
         ) : (
-            <div className="market-grid">
-              {visible.length === 0 && <p>No open markets yet.</p>}
-              {visible.map((m, i) => (
-                <Link
-                  href={`/markets/${m.id}`}
-                  className="card"
-                  key={m.id}
-                  style={{ "--i": i }}
-                >
-                  <div className="card-head">
-                    <p className="live">LIVE</p>
-                    <span className="card-cat">{m.category}</span>
+          <div className="home-deck">
+            <div className="home-deck-main">
+              {category ? (
+                <section className="home-cat-block">
+                  <div className="home-cat-head">
+                    <h2>{category}</h2>
                   </div>
-                  <h2>{m.question}</h2>
-                  <div className="odds-track" aria-hidden="true">
-                    <span className="odds-fill-yes" style={{ width: `${m.yes_price}%` }} />
-                  </div>
-                  <div className="odds-row">
-                    <span className="pct-yes">
-                      <span className="pct-k">YES</span>
-                      <span className="pct-n">{m.yes_price}%</span>
-                    </span>
-                    <span className="pct-no">
-                      <span className="pct-k">NO</span>
-                      <span className="pct-n">{m.no_price}%</span>
-                    </span>
-                  </div>
-                  <div className="card-stats">
-                    <span>{formatCount(m.traders_count)} traders</span>
-                    <span>{formatCount(m.volume)} vol</span>
-                  </div>
-                </Link>
-              ))}
+                  {visible.length === 0 ? (
+                    <p className="muted">No open markets in {category} yet.</p>
+                  ) : (
+                    <div className="market-grid home-cat-grid">
+                      {visible.map((m, i) => (
+                        <MarketCard key={m.id} m={m} i={i} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ) : catBlocks.length === 0 ? (
+                <p className="muted" style={{ padding: "0 0 24px" }}>
+                  No open markets yet.
+                </p>
+              ) : (
+                catBlocks.map((block) => (
+                  <section key={block.value} className="home-cat-block">
+                    <div className="home-cat-head">
+                      <h2>
+                        <Link href={block.href}>{block.label}</Link>
+                      </h2>
+                      {block.items.length > 4 ? (
+                        <Link href={block.href} className="home-cat-all">
+                          See all
+                        </Link>
+                      ) : null}
+                    </div>
+                    <div className="market-grid home-cat-grid">
+                      {block.items.slice(0, 4).map((m, i) => (
+                        <MarketCard key={m.id} m={m} i={i} />
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
             </div>
+            <aside className="home-side">
+              <SideList title="Trending" items={trending} />
+              <SideList title="Top movers" items={movers} />
+              <SideList title="New" items={newest} />
+              <SideList title="Highest volume" items={hottest} />
+            </aside>
+          </div>
         )}
       </div>
     </div>

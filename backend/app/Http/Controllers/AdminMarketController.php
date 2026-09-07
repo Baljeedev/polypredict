@@ -57,8 +57,8 @@ class AdminMarketController extends Controller
             'outcome' => 'required|in:yes,no',
         ]);
 
-        if ($market->status !== 'open') {
-            throw ValidationException::withMessages(['market' => ['Market is not open.']]);
+        if (! in_array($market->status, ['open', 'closed'], true)) {
+            throw ValidationException::withMessages(['market' => ['Market cannot be resolved.']]);
         }
 
         $winner = $data['outcome'];
@@ -92,6 +92,95 @@ class AdminMarketController extends Controller
 
             $market->status = 'resolved';
             $market->winner = $winner;
+            $market->save();
+        });
+
+        return $market->fresh();
+    }
+
+    public function update(Request $request, Market $market)
+    {
+        if (! $request->user()->is_admin) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (in_array($market->status, ['resolved', 'cancelled'], true)) {
+            throw ValidationException::withMessages(['market' => ['Settled markets cannot be edited.']]);
+        }
+
+        $data = $request->validate([
+            'question' => 'sometimes|required|string',
+            'category' => 'sometimes|required|string',
+            'closes_at' => 'sometimes|required|date',
+            'resolve_at' => 'nullable|date',
+            'resolution_rules' => 'sometimes|required|string',
+            'resolution_source' => 'sometimes|required|string',
+            'b' => 'nullable|integer|min:1',
+            'status' => 'nullable|in:draft,open',
+        ]);
+
+        if ((int) $market->volume > 0) {
+            unset($data['b']);
+        }
+
+        if ($market->status === 'closed') {
+            unset($data['status']);
+        }
+
+        $market->fill($data);
+        $market->save();
+
+        return $market->fresh();
+    }
+
+    public function close(Request $request, Market $market)
+    {
+        if (! $request->user()->is_admin) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($market->status !== 'open') {
+            throw ValidationException::withMessages(['market' => ['Only open markets can be closed.']]);
+        }
+
+        $market->status = 'closed';
+        $market->save();
+
+        return $market->fresh();
+    }
+
+    public function cancel(Request $request, Market $market)
+    {
+        if (! $request->user()->is_admin) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (! in_array($market->status, ['draft', 'open', 'closed'], true)) {
+            throw ValidationException::withMessages(['market' => ['Market cannot be cancelled.']]);
+        }
+
+        DB::transaction(function () use ($market) {
+            $positions = Position::where('market_id', $market->id)
+                ->where('status', 'open')
+                ->with('user.wallet')
+                ->get();
+
+            foreach ($positions as $pos) {
+                $wallet = $pos->user?->wallet;
+                $spent = (int) $pos->tokens_spent;
+
+                if ($wallet) {
+                    $wallet->available += $spent;
+                    $wallet->committed = max(0, (int) $wallet->committed - $spent);
+                    $wallet->save();
+                }
+
+                $pos->status = 'cancelled';
+                $pos->save();
+            }
+
+            $market->status = 'cancelled';
+            $market->winner = null;
             $market->save();
         });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import SiteNav from "../SiteNav";
 import Loader from "../Loader";
 import apiBase from "../apiBase";

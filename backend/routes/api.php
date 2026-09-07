@@ -10,6 +10,9 @@ use App\Http\Controllers\TradeController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::post('/forgot-password', [AuthController::class, 'forgot']);
+Route::post('/reset-password', [AuthController::class, 'reset']);
+
 Route::get('/auth/google', [AuthController::class, 'googleRedirect']);
 Route::get('/auth/google/callback', [AuthController::class, 'googleCallback']);
 
@@ -68,7 +71,7 @@ Route::get('/leaderboard', function () {
 Route::get('/leaderboard/experts', function (Request $request) {
     $category = $request->query('category');
 
-    return \App\Models\User::with(['positions.market'])->get()
+    $ranked = \App\Models\User::with(['positions.market'])->get()
         ->map(function ($u) use ($category) {
             $settled = $u->positions->whereIn('status', ['won', 'lost']);
             if ($category) {
@@ -82,17 +85,27 @@ Route::get('/leaderboard/experts', function (Request $request) {
             if ($total < 1) {
                 return null;
             }
+            $score = round($won / $total * 100, 1);
             return [
                 'username' => $u->username ?: $u->name,
-                'tokens' => (int) round($won / $total * 100),
+                'tokens' => (int) round($score),
+                'score' => $score,
                 'available' => $won,
                 'committed' => $lost,
             ];
         })
         ->filter()
-        ->sortByDesc('tokens')
-        ->values()
-        ->take(20)
+        ->sortByDesc('score')
+        ->values();
+
+    $limit = (int) $request->query('limit', 20);
+    if ($limit < 1) {
+        $limit = 20;
+    }
+    $limit = min($limit, 300);
+
+    return $ranked
+        ->take($limit)
         ->map(function ($row, $i) {
             $row['rank'] = $i + 1;
             return $row;
@@ -159,10 +172,17 @@ Route::get('/traders/{username}', function (string $username) {
         })
         ->values();
 
+    $wallet = $user->wallet;
+
     return [
         'user' => [
             'name' => $user->name,
             'username' => $user->username,
+        ],
+        'wallet' => [
+            'available' => (int) ($wallet->available ?? 0),
+            'committed' => (int) ($wallet->committed ?? 0),
+            'total' => (int) (($wallet->available ?? 0) + ($wallet->committed ?? 0)),
         ],
         'badges' => $badges,
         'history' => $history,
@@ -276,7 +296,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/admin/markets', [AdminMarketController::class, 'index']);
     Route::post('/admin/markets', [AdminMarketController::class, 'store']);
+    Route::post('/admin/markets/{market}/update', [AdminMarketController::class, 'update']);
     Route::post('/admin/markets/{market}/resolve', [AdminMarketController::class, 'resolve']);
+    Route::post('/admin/markets/{market}/close', [AdminMarketController::class, 'close']);
+    Route::post('/admin/markets/{market}/cancel', [AdminMarketController::class, 'cancel']);
     Route::post('/markets/{market}/buy', [TradeController::class, 'buy']);
 
     Route::post('/markets/{market}/sell', [TradeController::class, 'sell']);

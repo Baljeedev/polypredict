@@ -371,6 +371,22 @@ export default function Client({ id }) {
                 Back to markets
               </Link>
             </div>
+          ) : m.status === "cancelled" ? (
+            <div className="trade">
+              <p className="muted">This market was cancelled.</p>
+              <p className="muted">Open trades were refunded. No winner.</p>
+              <Link href="/" className="btn-alt">
+                Back to markets
+              </Link>
+            </div>
+          ) : m.status === "closed" ? (
+            <div className="trade">
+              <p className="muted">Trading is paused.</p>
+              <p className="muted">Waiting for the official result. Positions stay until resolve.</p>
+              <Link href="/" className="btn-alt">
+                Back to markets
+              </Link>
+            </div>
           ) : (
             <>
               <div className="mkt-sheet-top">
