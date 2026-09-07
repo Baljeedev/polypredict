@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import SiteNav from "../SiteNav";
 import Loader from "../Loader";
+import BadgeGrid from "../BadgeGrid";
+import ProfileHero from "../ProfileHero";
 import apiBase from "../apiBase";
 
 const API = apiBase();
@@ -66,6 +68,7 @@ function TraderSearch() {
     const person = profile.user || {};
     const badges = profile.badges || [];
     const rows = profile.history || [];
+    const w = profile.wallet || {};
     const display = person.username || person.name;
 
     return (
@@ -75,31 +78,20 @@ function TraderSearch() {
             ← Search traders
           </Link>
         </p>
-        <section className="profile-card">
-          <span className="profile-avatar">{initials(display)}</span>
-          <div className="profile-id">
-            <p className="home-kicker">Trader profile</p>
-            <h1>{display}</h1>
-            {person.name ? <p className="profile-name">{person.name}</p> : null}
-          </div>
-        </section>
+        <ProfileHero
+          initials={initials(display)}
+          title={display}
+          subtitle={person.username ? `@${person.username}` : null}
+          stats={[
+            { label: "Available", value: Number(w.available || 0).toLocaleString(), hint: "free to trade", hl: true },
+            { label: "In trades", value: Number(w.committed || 0).toLocaleString(), hint: "locked now" },
+            { label: "Total", value: Number(w.total || 0).toLocaleString(), hint: "available + in play" },
+            { label: "Predictions", value: String(rows.length), hint: "all time" },
+          ]}
+        />
         <section className="profile-badges">
           <h2>Achievements</h2>
-          {badges.length === 0 ? (
-            <p className="muted">No category badges yet.</p>
-          ) : (
-            <ul>
-              {badges.map((b) => (
-                <li key={b.category} className={b.level === "Expert" ? "is-expert" : ""}>
-                  <b>{b.category}</b>
-                  <span>{b.level}</span>
-                  <small>
-                    {b.rate}% · {b.won}/{b.total}
-                  </small>
-                </li>
-              ))}
-            </ul>
-          )}
+          <BadgeGrid badges={badges} empty="No category badges yet." />
         </section>
         <section className="profile-history">
           <h2>Prediction history</h2>

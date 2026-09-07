@@ -108,6 +108,7 @@ export default function AdminDashboardPage() {
     const [adminUser, setAdminUser] = useState(null);
     const [query, setQuery] = useState("");
     const [form, setForm] = useState(EMPTY_FORM);
+    const [editId, setEditId] = useState(null);
     const [menu, setMenu] = useState(null);
     const [notesRead, setNotesRead] = useState(false);
     const topRightRef = useRef(null);
@@ -159,29 +160,83 @@ export default function AdminDashboardPage() {
         setForm({ ...form, [k]: v });
     }
 
-    async function onCreate(e) {
+    function splitClosesAt(iso) {
+        const s = String(iso || "").replace(" ", "T");
+        const [date, timePart = ""] = s.split("T");
+        return { closes_date: date || "", closes_time: timePart.slice(0, 5) };
+    }
+
+    function startEdit(m) {
+        const { closes_date, closes_time } = splitClosesAt(m.closes_at);
+        setEditId(m.id);
+        setForm({
+            question: m.question || "",
+            category: m.category || "Sports",
+            closes_date,
+            closes_time,
+            resolution_rules: m.resolution_rules || "",
+            resolution_source: m.resolution_source || "",
+            b: String(m.b || 150),
+            status: m.status === "open" || m.status === "draft" ? m.status : "open",
+        });
+        setMessage("");
+        setView("create");
+    }
+
+    async function onSaveMarket(e) {
         e.preventDefault();
-        const res = await fetch(`${API}/api/admin/markets`, {
+        const payload = {
+            ...form,
+            closes_at: `${form.closes_date}T${form.closes_time}`,
+        };
+        const editing = markets.find((m) => m.id === editId);
+        if (editing && Number(editing.volume) > 0) {
+            delete payload.b;
+        }
+        if (editing && editing.status === "closed") {
+            delete payload.status;
+        }
+
+        const res = await fetch(
+            editId ? `${API}/api/admin/markets/${editId}/update` : `${API}/api/admin/markets`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    Authorization: "Bearer " + token(),
+                },
+                body: JSON.stringify(payload),
+            }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            setMessage(data.message || JSON.stringify(data.errors || data));
+            return;
+        }
+        setForm(EMPTY_FORM);
+        setEditId(null);
+        setMessage(editId ? "Market #" + data.id + " updated" : "Market #" + data.id + " created");
+        setView("markets");
+        loadMarkets();
+    }
+
+    async function postMarket(path, body) {
+        const res = await fetch(`${API}/api/admin/markets/${path}`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Accept: "application/json",
                 Authorization: "Bearer " + token(),
             },
-            body: JSON.stringify({
-                ...form,
-                closes_at: `${form.closes_date}T${form.closes_time}`,
-            }),
+            body: JSON.stringify(body || {}),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-            setMessage(data.message || JSON.stringify(data));
-            return;
+            setMessage(data.message || JSON.stringify(data.errors || data));
+            return false;
         }
-        setForm(EMPTY_FORM);
-        setMessage("Market #" + data.id + " created");
-        setView("markets");
-        loadMarkets();
+        return data;
     }
 
     async function resolveMarket(id, outcome) {
@@ -189,21 +244,29 @@ export default function AdminDashboardPage() {
         if (!window.confirm("Declare " + label + " the winner for market #" + id + "?")) {
             return;
         }
-        const res = await fetch(`${API}/api/admin/markets/${id}/resolve`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-                Authorization: "Bearer " + token(),
-            },
-            body: JSON.stringify({ outcome }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-            setMessage(JSON.stringify(data.errors || data.message || data));
+        const data = await postMarket(`${id}/resolve`, { outcome });
+        if (!data) return;
+        setMessage("Market #" + id + " resolved: " + label);
+        loadMarkets();
+    }
+
+    async function closeMarket(id) {
+        if (!window.confirm("Close market #" + id + "? Trading stops. You can still resolve later.")) {
             return;
         }
-        setMessage("Market #" + id + " resolved: " + label);
+        const data = await postMarket(`${id}/close`);
+        if (!data) return;
+        setMessage("Market #" + id + " closed. Trading is paused.");
+        loadMarkets();
+    }
+
+    async function cancelMarket(id) {
+        if (!window.confirm("Cancel market #" + id + "? Open trades get their tokens back. This cannot be undone.")) {
+            return;
+        }
+        const data = await postMarket(`${id}/cancel`);
+        if (!data) return;
+        setMessage("Market #" + id + " cancelled. Tokens refunded.");
         loadMarkets();
     }
 
@@ -257,9 +320,12 @@ export default function AdminDashboardPage() {
     const titles = {
         overview: "Overview",
         markets: "Markets",
-        create: "Add market",
+        create: editId ? "Edit market" : "Add market",
         users: "Users",
     };
+    const editingMarket = markets.find((m) => m.id === editId);
+    const lockLiquidity = Boolean(editingMarket && Number(editingMarket.volume) > 0);
+    const lockStatus = editingMarket?.status === "closed";
 
     const notifications = useMemo(() => {
         const items = [];
@@ -295,7 +361,10 @@ export default function AdminDashboardPage() {
         setMessage("");
         setMenu(null);
         setView(next);
-        if (next === "create") setForm(EMPTY_FORM);
+        if (next === "create") {
+            setEditId(null);
+            setForm(EMPTY_FORM);
+        }
         if (next === "users") loadUsers();
         if (next === "markets" || next === "overview") loadMarkets();
     }
@@ -628,29 +697,44 @@ export default function AdminDashboardPage() {
                                                 </td>
                                                 <td className="num adash-vol">{formatCount(m.volume)}</td>
                                                 <td>
-                                                    <Link href={`/markets/${m.id}`} className="adash-row-link">
-                                                        View
-                                                    </Link>
-                                                    {m.status === "open" && (
-                                                        <>
-                                                            {" "}
-                                                            <button
-                                                                type="button"
-                                                                className="btn-yes"
-                                                                onClick={() => resolveMarket(m.id, "yes")}
-                                                            >
-                                                                YES won
+                                                    <div className="adash-actions">
+                                                        <Link href={`/markets/${m.id}`} className="adash-row-btn">
+                                                            View
+                                                        </Link>
+                                                        {(m.status === "open" || m.status === "draft" || m.status === "closed") && (
+                                                            <button type="button" className="adash-row-btn" onClick={() => startEdit(m)}>
+                                                                Edit
                                                             </button>
-                                                            {" "}
-                                                            <button
-                                                                type="button"
-                                                                className="btn-no"
-                                                                onClick={() => resolveMarket(m.id, "no")}
-                                                            >
-                                                                NO won
+                                                        )}
+                                                        {(m.status === "open" || m.status === "closed") && (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-yes"
+                                                                    onClick={() => resolveMarket(m.id, "yes")}
+                                                                >
+                                                                    YES won
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-no"
+                                                                    onClick={() => resolveMarket(m.id, "no")}
+                                                                >
+                                                                    NO won
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {m.status === "open" && (
+                                                            <button type="button" className="adash-row-btn close" onClick={() => closeMarket(m.id)}>
+                                                                Close
                                                             </button>
-                                                        </>
-                                                    )}
+                                                        )}
+                                                        {(m.status === "open" || m.status === "closed" || m.status === "draft") && (
+                                                            <button type="button" className="adash-row-btn danger" onClick={() => cancelMarket(m.id)}>
+                                                                Cancel
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -716,9 +800,9 @@ export default function AdminDashboardPage() {
                     {view === "create" && (
                         <section className="adash-panel">
                             <div className="adash-panel-head">
-                                <h2>New market</h2>
+                                <h2>{editId ? `Edit market #${editId}` : "New market"}</h2>
                             </div>
-                            <form className="adash-form" onSubmit={onCreate}>
+                            <form className="adash-form" onSubmit={onSaveMarket}>
                                 <label>
                                     Question
                                     <input
@@ -780,24 +864,40 @@ export default function AdminDashboardPage() {
                                 <div className="adash-form-row">
                                     <label>
                                         Liquidity (b)
-                                        <select value={form.b} onChange={(e) => setField("b", e.target.value)}>
+                                        <select
+                                            value={form.b}
+                                            onChange={(e) => setField("b", e.target.value)}
+                                            disabled={lockLiquidity}
+                                        >
                                             <option value="100">100 (fast)</option>
                                             <option value="150">150 (normal)</option>
                                             <option value="500">500 (slow)</option>
                                         </select>
+                                        {lockLiquidity ? <small>Locked after trades start.</small> : null}
                                     </label>
                                     <label>
                                         Status
                                         <select
-                                            value={form.status}
+                                            value={lockStatus ? "closed" : form.status}
                                             onChange={(e) => setField("status", e.target.value)}
+                                            disabled={lockStatus}
                                         >
+                                            {lockStatus ? <option value="closed">closed</option> : null}
                                             <option value="draft">draft</option>
                                             <option value="open">open</option>
                                         </select>
                                     </label>
                                 </div>
-                                <button type="submit" className="adash-green">Create market</button>
+                                <div className="adash-form-row">
+                                    <button type="submit" className="adash-green">
+                                        {editId ? "Save changes" : "Create market"}
+                                    </button>
+                                    {editId ? (
+                                        <button type="button" className="adash-row-btn" onClick={() => go("markets")}>
+                                            Back to list
+                                        </button>
+                                    ) : null}
+                                </div>
                             </form>
                         </section>
                     )}

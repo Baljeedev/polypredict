@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Password;
 
 class AuthController extends Controller
 {
@@ -57,6 +58,46 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out']);
+    }
+
+    public function forgot(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        try {
+            Password::sendResetLink($request->only('email'));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json([
+            'message' => 'If that email exists, a reset link was sent.',
+        ]);
+    }
+
+    public function reset(Request $request)
+    {
+        $request->validate([
+            'token' => 'required|string',
+            'email' => 'required|email',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $status = Password::reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function (User $user, string $password) {
+                $user->forceFill(['password' => $password])->save();
+                $user->tokens()->delete();
+            }
+        );
+
+        if ($status !== Password::PASSWORD_RESET) {
+            throw ValidationException::withMessages([
+                'email' => ['This reset link is invalid or expired.'],
+            ]);
+        }
+
+        return response()->json(['message' => 'Password updated. You can log in.']);
     }
 
     public function googleRedirect()

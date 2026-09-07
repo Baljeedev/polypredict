@@ -1,5 +1,6 @@
 import { Outfit, Figtree, DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import SiteFooter from "./SiteFooter";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -33,7 +34,10 @@ export default function RootLayout({ children }) {
       lang="en"
       className={`${outfit.variable} ${figtree.variable} ${dmSans.variable} ${plex.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <SiteFooter />
+      </body>
     </html>
   );
 }

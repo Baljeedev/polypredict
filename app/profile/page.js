@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import SiteNav from "../SiteNav";
 import Loader from "../Loader";
+import BadgeGrid from "../BadgeGrid";
+import ProfileHero from "../ProfileHero";
 import apiBase from "../apiBase";
 
 const API = apiBase();
@@ -89,57 +91,26 @@ export default function ProfilePage() {
     <>
       <SiteNav />
       <main className="profile-page">
-        <section className="profile-card">
-          <span className="profile-avatar" aria-hidden="true">
-            {initials(display)}
-          </span>
-          <div className="profile-id">
-            <p className="home-kicker">Trader profile</p>
-            <h1>{display}</h1>
-            {u.name && u.username ? <p className="profile-name">{u.name}</p> : null}
-            <p className="muted">{u.email}</p>
-          </div>
-        </section>
+        <ProfileHero
+          initials={initials(display)}
+          title={display}
+          subtitle={u.name && u.username ? u.name : null}
+          extra={u.email ? <p className="muted">{u.email}</p> : null}
+          stats={[
+            { label: "Available", value: formatCount(w.available), hint: "free to trade", hl: true },
+            { label: "In trades", value: formatCount(w.committed), hint: "locked now" },
+            { label: "Claimed", value: formatCount(w.ad_tokens), hint: "daily rewards" },
+            { label: "Predictions", value: formatCount(rows.length), hint: "all time" },
+          ]}
+        />
 
         <section className="profile-badges">
           <h2>Achievements</h2>
-          {badges.length === 0 ? (
-            <p className="muted">Win a resolved market to earn a category badge.</p>
-          ) : (
-            <ul>
-              {badges.map((b) => (
-                <li key={b.category} className={b.level === "Expert" ? "is-expert" : ""}>
-                  <b>{b.category}</b>
-                  <span>{b.level}</span>
-                  <small>{b.rate}% · {b.won}/{b.total}</small>
-                </li>
-              ))}
-            </ul>
-          )}
+          <BadgeGrid
+            badges={badges}
+            empty="Win a resolved market to earn a category badge."
+          />
         </section>
-
-        <div className="profile-stats">
-          <article>
-            <span>Available</span>
-            <b>{formatCount(w.available)}</b>
-            <small>tokens you can trade</small>
-          </article>
-          <article>
-            <span>In trades</span>
-            <b>{formatCount(w.committed)}</b>
-            <small>locked in open markets</small>
-          </article>
-          <article>
-            <span>Ad tokens</span>
-            <b>{formatCount(w.ad_tokens)}</b>
-            <small>from daily claim</small>
-          </article>
-          <article>
-            <span>Predictions</span>
-            <b>{rows.length}</b>
-            <small>open, won, and lost</small>
-          </article>
-        </div>
 
         <section className="profile-history">
           <div className="profile-history-top">
